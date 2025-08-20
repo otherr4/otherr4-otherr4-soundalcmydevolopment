@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Lock, Shield, Activity, MapPin, User, Trash2, PauseCircle, LogOut, Key, Mail, Smartphone, Info, AlertTriangle, Settings as SettingsIcon, Eye, Users, CheckCircle, XCircle, ArrowLeft, Bell, Globe, CreditCard, HelpCircle, ShieldCheck, Database, Link2, Sliders, Sun, Moon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Lock, Shield, Activity, MapPin, User, Trash2, PauseCircle, LogOut, Key, Mail, Smartphone, Info, AlertTriangle, 
+  Settings as SettingsIcon, Eye, Users, CheckCircle, XCircle, ArrowLeft, Bell, Globe, CreditCard, HelpCircle, 
+  ShieldCheck, Database, Link2, Sliders, Sun, Moon, Download, Upload, EyeOff, Wifi, WifiOff, Volume2, VolumeX,
+  Palette, Languages, Calendar, DollarSign, FileText, Shield as ShieldIcon, Zap, RefreshCw, Save, AlertCircle,
+  ChevronRight, ChevronDown, ExternalLink, Copy, Check, X, Plus, Minus, Star, Clock, Calendar as CalendarIcon
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
-import { doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, getDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { updateEmail, updatePassword } from 'firebase/auth';
-import { getDatabase, ref as rtdbRef, onValue, remove } from 'firebase/database';
+import { updateEmail, updatePassword, sendPasswordResetEmail } from 'firebase/auth';
+import { getDatabase, ref as rtdbRef, onValue, remove, set } from 'firebase/database';
 import * as UAParser from 'ua-parser-js';
 import { logUserActivity } from '../utils/logUserActivity';
 import SEO from '../components/common/SEO';
@@ -24,20 +30,19 @@ const settingsSchema = `{
 }`;
 
 const sections = [
-  { key: 'overview', label: 'Overview', icon: <SettingsIcon /> },
-  { key: 'privacy', label: 'Privacy & Security', icon: <Shield /> },
-  { key: 'account', label: 'Account Management', icon: <User /> },
-  { key: 'activity', label: 'Activity & Devices', icon: <Activity /> },
-  { key: 'notifications', label: 'Notifications & Alerts', icon: <Bell /> },
-  { key: 'language', label: 'Language & Region', icon: <Globe /> },
-  { key: 'subscription', label: 'Subscription & Billing', icon: <CreditCard /> },
-  { key: 'security', label: 'Security Center', icon: <ShieldCheck /> },
-  { key: 'dataprivacy', label: 'Data & Privacy', icon: <Database /> },
-  { key: 'policy', label: 'App Policy', icon: <Info /> }, // NEW SECTION
-  { key: 'integrations', label: 'Integrations', icon: <Link2 /> },
-  { key: 'personalization', label: 'Personalization', icon: <Sliders /> },
-  { key: 'support', label: 'Support & Help', icon: <HelpCircle /> },
-  { key: 'advanced', label: 'Advanced', icon: <AlertTriangle /> },
+  { key: 'overview', label: 'Overview', icon: <SettingsIcon />, description: 'Account settings overview and quick actions' },
+  { key: 'privacy', label: 'Privacy & Security', icon: <Shield />, description: 'Control your privacy and security settings' },
+  { key: 'account', label: 'Account Management', icon: <User />, description: 'Manage your account information and credentials' },
+  { key: 'activity', label: 'Activity & Devices', icon: <Activity />, description: 'View activity log and manage devices' },
+  { key: 'notifications', label: 'Notifications & Alerts', icon: <Bell />, description: 'Configure notification preferences' },
+  { key: 'language', label: 'Language & Region', icon: <Globe />, description: 'Set language and regional preferences' },
+  { key: 'subscription', label: 'Subscription & Billing', icon: <CreditCard />, description: 'Manage subscriptions and billing' },
+  { key: 'security', label: 'Security Center', icon: <ShieldCheck />, description: 'Advanced security features and 2FA' },
+  { key: 'dataprivacy', label: 'Data & Privacy', icon: <Database />, description: 'Data export, deletion, and privacy controls' },
+  { key: 'policy', label: 'App Policy', icon: <FileText />, description: 'Official app policies and terms' },
+  { key: 'integrations', label: 'Integrations', icon: <Link2 />, description: 'Third-party integrations and API access' },
+  { key: 'personalization', label: 'Personalization', icon: <Sliders />, description: 'Customize your experience' },
+  { key: 'support', label: 'Support & Help', icon: <HelpCircle />, description: 'Get help and support resources' },
 ];
 
 const SettingsPage: React.FC = () => {
@@ -59,6 +64,45 @@ const SettingsPage: React.FC = () => {
   const [emailError, setEmailError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  // Enhanced state management
+  const [isLoading, setIsLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Notification settings
+  const [notificationSettings, setNotificationSettings] = useState({
+    email: true,
+    push: true,
+    sound: false,
+    vibration: true,
+    messagePreviews: true,
+    collaborationAlerts: true,
+    securityAlerts: true,
+    marketingEmails: false
+  });
+
+  // Language and region settings
+  const [languageSettings, setLanguageSettings] = useState({
+    language: 'en',
+    region: 'US',
+    timezone: 'UTC',
+    dateFormat: 'MM/DD/YYYY',
+    timeFormat: '12h',
+    currency: 'USD'
+  });
+
+  // Personalization settings
+  const [personalizationSettings, setPersonalizationSettings] = useState({
+    theme: 'dark',
+    accentColor: 'blue',
+    fontSize: 'medium',
+    animations: true,
+    autoSave: true,
+    compactMode: false
+  });
 
   const realtimeDb = getDatabase();
   const [activityLog, setActivityLog] = useState<any[]>([]);
@@ -134,27 +178,112 @@ const SettingsPage: React.FC = () => {
     return 'dark';
   });
 
-  useEffect(() => {
-    document.documentElement.classList.remove('dark', 'light');
-    document.documentElement.classList.add(theme);
-    localStorage.setItem('theme', theme);
-    // Optionally: save to user profile if logged in
+  // Enhanced theme management with database sync
+  const updateTheme = useCallback(async (newTheme: string) => {
+    setTheme(newTheme);
+    document.documentElement.classList.remove('dark', 'light', 'auto');
+    document.documentElement.classList.add(newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    // Save to user profile if logged in
     if (user) {
-      updateDoc(doc(db, 'users', user.uid), { theme }).catch(() => {});
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { 
+          theme: newTheme,
+          lastSettingsUpdate: new Date().toISOString()
+        });
+        await logUserActivity(user.uid, 'theme_change', { theme: newTheme });
+      } catch (error) {
+        console.error('Failed to save theme to database:', error);
+      }
     }
-  }, [theme, user]);
+  }, [user]);
 
-  // Load privacy settings from Firestore
+  // Responsive detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Scroll position tracking for mobile navigation
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollPosition(window.scrollY);
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-save functionality
+  const autoSave = useCallback(async (settings: any, type: string) => {
+    if (!user) return;
+    
+    setSaveStatus('saving');
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        [`settings.${type}`]: settings,
+        lastSettingsUpdate: new Date().toISOString()
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      setSaveStatus('error');
+      toast.error('Failed to save settings');
+    }
+  }, [user]);
+
+  // Load all settings from Firestore
   useEffect(() => {
     if (!user) return;
-    getDoc(doc(db, 'users', user.uid)).then(docSnap => {
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        setProfilePublic(d.profilePublic !== false);
-        setOnlineStatus(d.onlineStatus !== false);
-        setDeactivated(!!d.deactivated);
+    
+    const loadSettings = async () => {
+      try {
+        setIsLoading(true);
+        const docSnap = await getDoc(doc(db, 'users', user.uid));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          // Load privacy settings
+          setProfilePublic(data.profilePublic !== false);
+          setOnlineStatus(data.onlineStatus !== false);
+          setDeactivated(!!data.deactivated);
+          
+          // Load notification settings
+          if (data.settings?.notifications) {
+            setNotificationSettings(prev => ({ ...prev, ...data.settings.notifications }));
+          }
+          
+          // Load language settings
+          if (data.settings?.language) {
+            setLanguageSettings(prev => ({ ...prev, ...data.settings.language }));
+          }
+          
+          // Load personalization settings
+          if (data.settings?.personalization) {
+            setPersonalizationSettings(prev => ({ ...prev, ...data.settings.personalization }));
+          }
+          
+          // Load theme
+          if (data.theme) {
+            setTheme(data.theme);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        toast.error('Failed to load settings');
+      } finally {
+        setIsLoading(false);
       }
-    });
+    };
+    
+    loadSettings();
   }, [user]);
 
   // Fetch real activity log and devices from Realtime Database
@@ -369,6 +498,149 @@ const SettingsPage: React.FC = () => {
       setConfirmLogoutOpen(false);
     } catch (e) {
       toast.error('Failed to log out device.');
+    }
+  };
+
+  // Enhanced notification settings handlers
+  const handleNotificationToggle = async (key: keyof typeof notificationSettings) => {
+    const newSettings = { ...notificationSettings, [key]: !notificationSettings[key] };
+    setNotificationSettings(newSettings);
+    await autoSave(newSettings, 'notifications');
+    toast.success(`${key.replace(/([A-Z])/g, ' $1').toLowerCase()} ${newSettings[key] ? 'enabled' : 'disabled'}`);
+  };
+
+  // Enhanced language settings handlers
+  const handleLanguageChange = async (key: keyof typeof languageSettings, value: string) => {
+    const newSettings = { ...languageSettings, [key]: value };
+    setLanguageSettings(newSettings);
+    await autoSave(newSettings, 'language');
+    toast.success(`${key.replace(/([A-Z])/g, ' $1').toLowerCase()} updated to ${value}`);
+  };
+
+  // Enhanced personalization settings handlers
+  const handlePersonalizationChange = async (key: keyof typeof personalizationSettings, value: any) => {
+    const newSettings = { ...personalizationSettings, [key]: value };
+    setPersonalizationSettings(newSettings);
+    await autoSave(newSettings, 'personalization');
+    
+    if (key === 'theme') {
+      await updateTheme(value);
+    }
+    
+    toast.success(`${key.replace(/([A-Z])/g, ' $1').toLowerCase()} updated`);
+  };
+
+  // Professional App Policy Content
+  const appPolicyContent = {
+    privacy: {
+      title: "Privacy Policy",
+      content: `SoundAlchemy is committed to protecting your privacy and ensuring the security of your personal data. Our comprehensive privacy policy outlines how we collect, use, and protect your information.
+
+**Data Collection & Usage:**
+• We collect only necessary information to provide our services
+• Your data is encrypted using industry-standard AES-256 encryption
+• We never sell or share your personal data with third parties
+• You have full control over your data and can request deletion at any time
+
+**Security Measures:**
+• End-to-end encryption for all communications
+• Regular security audits and penetration testing
+• Compliance with GDPR, CCPA, and other international privacy laws
+• Two-factor authentication (2FA) for enhanced account security
+
+**Data Retention:**
+• Account data is retained until you request deletion
+• Activity logs are automatically deleted after 90 days
+• Backup data is encrypted and securely stored
+
+**Your Rights:**
+• Access, modify, or delete your personal data
+• Export your data in standard formats
+• Opt-out of marketing communications
+• Request data portability
+
+For detailed information, contact our privacy team at privacy@soundalcmy.com`
+    },
+    terms: {
+      title: "Terms of Service",
+      content: `By using SoundAlchemy, you agree to these terms of service that govern your use of our platform.
+
+**Acceptable Use:**
+• Use the platform for legitimate musical collaboration
+• Respect intellectual property rights
+• Maintain appropriate behavior in all interactions
+• Report violations or suspicious activity
+
+**Account Responsibilities:**
+• Keep your account credentials secure
+• Notify us immediately of any security concerns
+• Maintain accurate and up-to-date information
+• Accept responsibility for account activities
+
+**Service Availability:**
+• We strive for 99.9% uptime but cannot guarantee uninterrupted service
+• Scheduled maintenance will be announced in advance
+• Emergency maintenance may occur without notice
+
+**Intellectual Property:**
+• You retain ownership of your original content
+• You grant us license to display and distribute your content
+• Respect copyright and licensing requirements
+• Report copyright violations
+
+**Limitation of Liability:**
+• We provide the service "as is" without warranties
+• We are not liable for indirect or consequential damages
+• Maximum liability is limited to your subscription amount
+
+**Termination:**
+• You may terminate your account at any time
+• We may terminate accounts for policy violations
+• Data deletion occurs within 30 days of termination
+
+For questions about these terms, contact legal@soundalcmy.com`
+    },
+    security: {
+      title: "Security Policy",
+      content: `SoundAlchemy implements comprehensive security measures to protect your data and ensure platform integrity.
+
+**Infrastructure Security:**
+• Cloud infrastructure with enterprise-grade security
+• Regular security updates and vulnerability assessments
+• DDoS protection and traffic monitoring
+• Geographic data distribution for redundancy
+
+**Application Security:**
+• Secure coding practices and regular code audits
+• Input validation and output encoding
+• SQL injection and XSS protection
+• Rate limiting and abuse prevention
+
+**Data Protection:**
+• Encryption at rest and in transit (TLS 1.3)
+• Secure key management and rotation
+• Regular backup testing and recovery procedures
+• Compliance with industry security standards
+
+**Access Control:**
+• Role-based access control (RBAC)
+• Multi-factor authentication (MFA)
+• Session management and timeout policies
+• Audit logging for all administrative actions
+
+**Incident Response:**
+• 24/7 security monitoring and alerting
+• Incident response team with defined procedures
+• User notification within 72 hours of incidents
+• Regular security training for all staff
+
+**Third-Party Security:**
+• Vendor security assessments
+• Data processing agreements (DPAs)
+• Regular third-party security reviews
+• Limited data sharing with trusted partners
+
+For security concerns, contact security@soundalcmy.com`
     }
   };
 
@@ -630,50 +902,319 @@ const SettingsPage: React.FC = () => {
       case 'notifications':
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
-            <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Bell className="text-primary-400" /> Notifications & Alerts</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Bell className="text-primary-400" /> Notifications & Alerts</h2>
+              {saveStatus === 'saving' && <div className="flex items-center gap-2 text-xs text-gray-400"><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</div>}
+              {saveStatus === 'saved' && <div className="flex items-center gap-2 text-xs text-green-400"><Check className="w-4 h-4" /> Saved</div>}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Bell /> General Notifications</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Email Notifications</span>
+                      <p className="text-xs text-gray-400">Receive notifications via email</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('email')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.email ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.email ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Push Notifications</span>
+                      <p className="text-xs text-gray-400">Receive push notifications</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('push')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.push ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.push ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Sound & Vibration</span>
+                      <p className="text-xs text-gray-400">Play sounds and vibrate for notifications</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('sound')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.sound ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.sound ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Message Previews</span>
+                      <p className="text-xs text-gray-400">Show message content in notifications</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('messagePreviews')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.messagePreviews ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.messagePreviews ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><AlertCircle /> Alert Types</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Collaboration Alerts</span>
+                      <p className="text-xs text-gray-400">New collaboration requests and updates</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('collaborationAlerts')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.collaborationAlerts ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.collaborationAlerts ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Security Alerts</span>
+                      <p className="text-xs text-gray-400">Account security and login notifications</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('securityAlerts')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.securityAlerts ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.securityAlerts ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Marketing Emails</span>
+                      <p className="text-xs text-gray-400">News, updates, and promotional content</p>
+                    </div>
+                    <button 
+                      onClick={() => handleNotificationToggle('marketingEmails')}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        notificationSettings.marketingEmails ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        notificationSettings.marketingEmails ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Bell /> Notification Preferences</h3>
-              <ul className="space-y-3">
-                <li className="flex items-center justify-between">
-                  <span>Email Notifications</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Push Notifications</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Sound & Vibration</span>
-                  <button className="px-3 py-1 rounded-full bg-gray-600 text-gray-200 font-bold">Off</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Message Previews</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
-                </li>
-              </ul>
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Clock /> Notification Schedule</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-sm font-medium">Quiet Hours</div>
+                  <div className="text-xs text-gray-400">10:00 PM - 8:00 AM</div>
+                  <button className="mt-2 text-xs text-primary-400 hover:text-primary-300">Configure</button>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-sm font-medium">Weekend Mode</div>
+                  <div className="text-xs text-gray-400">Reduced notifications</div>
+                  <button className="mt-2 text-xs text-primary-400 hover:text-primary-300">Configure</button>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-sm font-medium">Priority Contacts</div>
+                  <div className="text-xs text-gray-400">Always notify</div>
+                  <button className="mt-2 text-xs text-primary-400 hover:text-primary-300">Manage</button>
+                </div>
+              </div>
             </div>
           </motion.div>
         );
       case 'language':
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
-            <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Globe className="text-primary-400" /> Language & Region</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Globe className="text-primary-400" /> Language & Region</h2>
+              {saveStatus === 'saving' && <div className="flex items-center gap-2 text-xs text-gray-400"><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</div>}
+              {saveStatus === 'saved' && <div className="flex items-center gap-2 text-xs text-green-400"><Check className="w-4 h-4" /> Saved</div>}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Languages /> Language Settings</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">App Language</label>
+                    <select 
+                      value={languageSettings.language}
+                      onChange={(e) => handleLanguageChange('language', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                      <option value="fr">Français</option>
+                      <option value="de">Deutsch</option>
+                      <option value="it">Italiano</option>
+                      <option value="pt">Português</option>
+                      <option value="ru">Русский</option>
+                      <option value="ja">日本語</option>
+                      <option value="ko">한국어</option>
+                      <option value="zh">中文</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Region</label>
+                    <select 
+                      value={languageSettings.region}
+                      onChange={(e) => handleLanguageChange('region', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="US">United States</option>
+                      <option value="CA">Canada</option>
+                      <option value="GB">United Kingdom</option>
+                      <option value="AU">Australia</option>
+                      <option value="DE">Germany</option>
+                      <option value="FR">France</option>
+                      <option value="JP">Japan</option>
+                      <option value="KR">South Korea</option>
+                      <option value="CN">China</option>
+                      <option value="IN">India</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Timezone</label>
+                    <select 
+                      value={languageSettings.timezone}
+                      onChange={(e) => handleLanguageChange('timezone', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                      <option value="EST">EST (Eastern Standard Time)</option>
+                      <option value="CST">CST (Central Standard Time)</option>
+                      <option value="MST">MST (Mountain Standard Time)</option>
+                      <option value="PST">PST (Pacific Standard Time)</option>
+                      <option value="GMT">GMT (Greenwich Mean Time)</option>
+                      <option value="CET">CET (Central European Time)</option>
+                      <option value="JST">JST (Japan Standard Time)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Calendar /> Format Settings</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Date Format</label>
+                    <select 
+                      value={languageSettings.dateFormat}
+                      onChange={(e) => handleLanguageChange('dateFormat', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="MM/DD/YYYY">MM/DD/YYYY (US)</option>
+                      <option value="DD/MM/YYYY">DD/MM/YYYY (EU)</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD (ISO)</option>
+                      <option value="MM-DD-YY">MM-DD-YY (Short)</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Time Format</label>
+                    <select 
+                      value={languageSettings.timeFormat}
+                      onChange={(e) => handleLanguageChange('timeFormat', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="12h">12-hour (AM/PM)</option>
+                      <option value="24h">24-hour</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Currency</label>
+                    <select 
+                      value={languageSettings.currency}
+                      onChange={(e) => handleLanguageChange('currency', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="JPY">JPY (¥)</option>
+                      <option value="CAD">CAD (C$)</option>
+                      <option value="AUD">AUD (A$)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Globe /> Language & Regional Settings</h3>
-              <ul className="space-y-3">
-                <li className="flex items-center justify-between">
-                  <span>App Language</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">English</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Date/Time Format</span>
-                  <button className="px-3 py-1 rounded-full bg-gray-600 text-gray-200 font-bold">24-hour</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Currency</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">USD</button>
-                </li>
-              </ul>
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Info /> Preview</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-gray-400 mb-1">Date</div>
+                  <div className="font-medium">
+                    {new Date().toLocaleDateString(languageSettings.language, {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit'
+                    })}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-gray-400 mb-1">Time</div>
+                  <div className="font-medium">
+                    {new Date().toLocaleTimeString(languageSettings.language, {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: languageSettings.timeFormat === '12h'
+                    })}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-gray-400 mb-1">Currency</div>
+                  <div className="font-medium">
+                    {new Intl.NumberFormat(languageSettings.language, {
+                      style: 'currency',
+                      currency: languageSettings.currency
+                    }).format(1234.56)}
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         );
@@ -720,21 +1261,150 @@ const SettingsPage: React.FC = () => {
         );
       case 'policy':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
-            <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Info className="text-primary-400" /> App Policy</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base">Official App Policy</h3>
-              <p className="text-gray-300 text-sm">
-                Welcome to SoundAlchemy. We are committed to protecting your privacy and ensuring the security of your data. Our platform uses industry-standard security practices, including encryption, secure authentication, and regular audits. We do not share your personal data with third parties without your consent. You have full control over your data, can download or delete your information at any time, and can contact support for any privacy concerns. For more details, please review our full Privacy Policy and Terms of Service.
-              </p>
-              <ul className="list-disc ml-6 text-gray-300 space-y-2 mt-2">
-                <li>All user data is encrypted and securely stored.</li>
-                <li>We comply with GDPR and other international privacy laws.</li>
-                <li>Two-factor authentication (2FA) is available for enhanced security.</li>
-                <li>You can request data deletion or export at any time.</li>
-                <li>Contact support for any privacy or security questions.</li>
-              </ul>
-              <div className="mt-4 text-xs text-gray-400">Last updated: June 2024</div>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
+            <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><FileText className="text-primary-400" /> App Policy</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <button
+                onClick={() => setExpandedSections(prev => new Set([...prev, 'privacy']))}
+                className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 hover:border-primary-500 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Shield className="w-6 h-6 text-primary-400" />
+                  <h3 className="font-semibold text-primary-400">Privacy Policy</h3>
+                </div>
+                <p className="text-xs text-gray-400">How we collect, use, and protect your data</p>
+              </button>
+              
+              <button
+                onClick={() => setExpandedSections(prev => new Set([...prev, 'terms']))}
+                className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 hover:border-primary-500 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <FileText className="w-6 h-6 text-primary-400" />
+                  <h3 className="font-semibold text-primary-400">Terms of Service</h3>
+                </div>
+                <p className="text-xs text-gray-400">Rules and guidelines for using our platform</p>
+              </button>
+              
+              <button
+                onClick={() => setExpandedSections(prev => new Set([...prev, 'security']))}
+                className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 hover:border-primary-500 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <ShieldCheck className="w-6 h-6 text-primary-400" />
+                  <h3 className="font-semibold text-primary-400">Security Policy</h3>
+                </div>
+                <p className="text-xs text-gray-400">Our security measures and practices</p>
+              </button>
+            </div>
+            
+            <AnimatePresence>
+              {expandedSections.has('privacy') && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-6 rounded-lg bg-dark-800/80 border border-primary-700"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-primary-400 flex items-center gap-2">
+                      <Shield className="w-5 h-5" />
+                      {appPolicyContent.privacy.title}
+                    </h3>
+                    <button
+                      onClick={() => setExpandedSections(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete('privacy');
+                        return newSet;
+                      })}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="prose prose-invert max-w-none text-sm">
+                    <pre className="whitespace-pre-wrap text-gray-300 font-sans">{appPolicyContent.privacy.content}</pre>
+                  </div>
+                </motion.div>
+              )}
+              
+              {expandedSections.has('terms') && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-6 rounded-lg bg-dark-800/80 border border-primary-700"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-primary-400 flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      {appPolicyContent.terms.title}
+                    </h3>
+                    <button
+                      onClick={() => setExpandedSections(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete('terms');
+                        return newSet;
+                      })}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="prose prose-invert max-w-none text-sm">
+                    <pre className="whitespace-pre-wrap text-gray-300 font-sans">{appPolicyContent.terms.content}</pre>
+                  </div>
+                </motion.div>
+              )}
+              
+              {expandedSections.has('security') && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-6 rounded-lg bg-dark-800/80 border border-primary-700"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-primary-400 flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5" />
+                      {appPolicyContent.security.title}
+                    </h3>
+                    <button
+                      onClick={() => setExpandedSections(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete('security');
+                        return newSet;
+                      })}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="prose prose-invert max-w-none text-sm">
+                    <pre className="whitespace-pre-wrap text-gray-300 font-sans">{appPolicyContent.security.content}</pre>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Info /> Contact Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <div className="font-medium text-gray-200">Privacy Team</div>
+                  <div className="text-gray-400">privacy@soundalcmy.com</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-200">Legal Team</div>
+                  <div className="text-gray-400">legal@soundalcmy.com</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-200">Security Team</div>
+                  <div className="text-gray-400">security@soundalcmy.com</div>
+                </div>
+              </div>
+              <div className="mt-4 text-xs text-gray-400">Last updated: December 2024 | Version 2.1</div>
             </div>
           </motion.div>
         );
@@ -750,11 +1420,170 @@ const SettingsPage: React.FC = () => {
         );
       case 'personalization':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
-            <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Sliders className="text-primary-400" /> Personalization</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full items-center justify-center min-h-[120px]">
-              <span className="inline-block px-4 py-2 rounded-full bg-yellow-500/20 text-yellow-400 font-bold text-xs mb-2">Coming Soon</span>
-              <p className="text-xs text-gray-400 text-center">Personalization options (theme, layout, notification sounds) are coming soon.</p>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Sliders className="text-primary-400" /> Personalization</h2>
+              {saveStatus === 'saving' && <div className="flex items-center gap-2 text-xs text-gray-400"><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</div>}
+              {saveStatus === 'saved' && <div className="flex items-center gap-2 text-xs text-green-400"><Check className="w-4 h-4" /> Saved</div>}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Palette /> Theme & Appearance</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Theme</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => handlePersonalizationChange('theme', 'dark')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          personalizationSettings.theme === 'dark'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-dark-600 bg-dark-700 text-gray-300 hover:border-primary-500/50'
+                        }`}
+                      >
+                        <div className="w-full h-8 bg-gray-900 rounded mb-2"></div>
+                        <span className="text-xs">Dark</span>
+                      </button>
+                      <button
+                        onClick={() => handlePersonalizationChange('theme', 'light')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          personalizationSettings.theme === 'light'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-dark-600 bg-dark-700 text-gray-300 hover:border-primary-500/50'
+                        }`}
+                      >
+                        <div className="w-full h-8 bg-gray-100 rounded mb-2"></div>
+                        <span className="text-xs">Light</span>
+                      </button>
+                      <button
+                        onClick={() => handlePersonalizationChange('theme', 'auto')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          personalizationSettings.theme === 'auto'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-dark-600 bg-dark-700 text-gray-300 hover:border-primary-500/50'
+                        }`}
+                      >
+                        <div className="w-full h-8 bg-gradient-to-r from-gray-900 to-gray-100 rounded mb-2"></div>
+                        <span className="text-xs">Auto</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Accent Color</label>
+                    <div className="grid grid-cols-6 gap-2">
+                      {['blue', 'purple', 'green', 'red', 'orange', 'pink'].map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => handlePersonalizationChange('accentColor', color)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all ${
+                            personalizationSettings.accentColor === color
+                              ? 'border-white scale-110'
+                              : 'border-dark-600 hover:scale-105'
+                          }`}
+                          style={{
+                            backgroundColor: color === 'blue' ? '#3b82f6' :
+                                           color === 'purple' ? '#8b5cf6' :
+                                           color === 'green' ? '#10b981' :
+                                           color === 'red' ? '#ef4444' :
+                                           color === 'orange' ? '#f97316' :
+                                           color === 'pink' ? '#ec4899' : '#3b82f6'
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Font Size</label>
+                    <select 
+                      value={personalizationSettings.fontSize}
+                      onChange={(e) => handlePersonalizationChange('fontSize', e.target.value)}
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                      <option value="extra-large">Extra Large</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Zap /> Interface Options</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Animations</span>
+                      <p className="text-xs text-gray-400">Enable smooth transitions and animations</p>
+                    </div>
+                    <button 
+                      onClick={() => handlePersonalizationChange('animations', !personalizationSettings.animations)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        personalizationSettings.animations ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        personalizationSettings.animations ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Auto Save</span>
+                      <p className="text-xs text-gray-400">Automatically save changes</p>
+                    </div>
+                    <button 
+                      onClick={() => handlePersonalizationChange('autoSave', !personalizationSettings.autoSave)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        personalizationSettings.autoSave ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        personalizationSettings.autoSave ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium">Compact Mode</span>
+                      <p className="text-xs text-gray-400">Reduce spacing for more content</p>
+                    </div>
+                    <button 
+                      onClick={() => handlePersonalizationChange('compactMode', !personalizationSettings.compactMode)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        personalizationSettings.compactMode ? 'bg-primary-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        personalizationSettings.compactMode ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Info /> Preview</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-sm font-medium mb-2">Current Theme</div>
+                  <div className="text-xs text-gray-400 capitalize">{personalizationSettings.theme} Mode</div>
+                </div>
+                <div className="p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-sm font-medium mb-2">Accent Color</div>
+                  <div className="text-xs text-gray-400 capitalize">{personalizationSettings.accentColor}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-dark-700/50">
+                  <div className="text-sm font-medium mb-2">Font Size</div>
+                  <div className="text-xs text-gray-400 capitalize">{personalizationSettings.fontSize.replace('-', ' ')}</div>
+                </div>
+              </div>
             </div>
           </motion.div>
         );
@@ -862,75 +1691,164 @@ const SettingsPage: React.FC = () => {
         schema={settingsSchema}
       />
       {deleting && (
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black bg-opacity-80">
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black bg-opacity-80 backdrop-blur-sm">
           <LoadingSpinner size="large" color="#fff" />
           <div className="mt-6 text-lg font-semibold text-white animate-pulse">Deleting your account…</div>
+          <div className="mt-2 text-sm text-gray-300">This process cannot be undone.</div>
+        </div>
+      )}
+      
+      {isLoading && (
+        <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <LoadingSpinner size="large" color="#fff" />
+          <div className="mt-4 text-sm text-gray-300">Loading settings...</div>
         </div>
       )}
       <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-        <div className="w-full bg-gradient-to-r from-primary-900 via-dark-900 to-primary-900 py-6 px-3 sm:py-8 sm:px-4 md:px-12 flex flex-row items-center gap-3 border-b border-dark-700" style={{background: 'linear-gradient(90deg, #181c24 0%, #23272f 100%)'}}>
-          {/* Back button for mobile */}
+        <div className="w-full bg-gradient-to-r from-primary-900 via-dark-900 to-primary-900 py-6 px-3 sm:py-8 sm:px-4 md:px-12 flex flex-row items-center gap-3 border-b border-dark-700 shadow-lg" style={{background: 'linear-gradient(90deg, #181c24 0%, #23272f 100%)'}}>
+          {/* Enhanced Back button for mobile */}
           <button
-            className="md:hidden flex items-center justify-center p-2 mr-2 rounded-full hover:bg-primary-500/10 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="md:hidden flex items-center justify-center p-2 mr-2 rounded-full hover:bg-primary-500/10 focus:outline-none focus:ring-2 focus:ring-primary-400 transition-all duration-200"
             onClick={() => window.history.back()}
             aria-label="Go back"
           >
             <ArrowLeft className="w-6 h-6 text-primary-400" />
           </button>
+          
           <div className="flex-1">
-            <h1 className="text-lg sm:text-xl md:text-3xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><SettingsIcon className="text-primary-400" /> Account Settings</h1>
-            <p className="text-xs sm:text-sm md:text-lg text-gray-300">Full control over your SoundAlchemy account, privacy, and security.</p>
+            <h1 className="text-lg sm:text-xl md:text-3xl font-bold mb-1 flex items-center gap-2 sm:gap-3">
+              <SettingsIcon className="text-primary-400" /> 
+              Account Settings
+            </h1>
+            <p className="text-xs sm:text-sm md:text-lg text-gray-300">
+              Full control over your SoundAlchemy account, privacy, and security.
+            </p>
+            {/* Save status indicator */}
+            {saveStatus === 'saving' && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-yellow-400">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                Saving changes...
+              </div>
+            )}
+            {saveStatus === 'saved' && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-green-400">
+                <Check className="w-3 h-3" />
+                Changes saved successfully
+              </div>
+            )}
+            {saveStatus === 'error' && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-red-400">
+                <X className="w-3 h-3" />
+                Failed to save changes
+              </div>
+            )}
           </div>
-          {/* Theme toggle */}
-          <div className="flex items-center gap-2 ml-4">
-            <button
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              className={`p-2 rounded-lg border border-primary-700 transition-colors ${theme === 'dark' ? 'bg-primary-500 text-white' : 'bg-dark-600 text-gray-400'}`}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            >
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <span className="text-xs text-gray-400">{theme === 'dark' ? 'Dark' : 'Light'} Mode</span>
+          
+          {/* Enhanced Theme toggle with better UX */}
+          <div className="flex items-center gap-3 ml-4">
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-xs text-gray-400">Theme:</span>
+            </div>
+            <div className="flex items-center bg-dark-800 rounded-lg p-1 border border-dark-600">
+              <button
+                aria-label="Switch to light mode"
+                className={`p-2 rounded-md transition-all duration-200 ${
+                  theme === 'light' 
+                    ? 'bg-primary-500 text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-white hover:bg-dark-700'
+                }`}
+                onClick={() => updateTheme('light')}
+              >
+                <Sun className="w-4 h-4" />
+              </button>
+              <button
+                aria-label="Switch to dark mode"
+                className={`p-2 rounded-md transition-all duration-200 ${
+                  theme === 'dark' 
+                    ? 'bg-primary-500 text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-white hover:bg-dark-700'
+                }`}
+                onClick={() => updateTheme('dark')}
+              >
+                <Moon className="w-4 h-4" />
+              </button>
+              <button
+                aria-label="Switch to auto mode"
+                className={`p-2 rounded-md transition-all duration-200 ${
+                  theme === 'auto' 
+                    ? 'bg-primary-500 text-white shadow-lg' 
+                    : 'text-gray-400 hover:text-white hover:bg-dark-700'
+                }`}
+                onClick={() => updateTheme('auto')}
+              >
+                <div className="w-4 h-4 bg-gradient-to-r from-gray-900 to-gray-100 rounded-sm"></div>
+              </button>
+            </div>
+            <div className="hidden md:block text-xs text-gray-400 capitalize">
+              {theme} Mode
+            </div>
           </div>
         </div>
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full py-8 px-2 sm:px-4 md:px-8 gap-8">
-          {/* Mobile Tab Bar for Section Navigation */}
-          <nav className="flex md:hidden gap-2 mb-6 overflow-x-auto no-scrollbar sticky top-0 z-20 bg-gray-900/95 py-2 -mx-2 px-2 border-b border-dark-700">
+          {/* Enhanced Mobile Tab Bar for Section Navigation */}
+          <nav className={`flex md:hidden gap-2 mb-6 overflow-x-auto no-scrollbar sticky top-0 z-20 transition-all duration-300 ${
+            scrollPosition > 100 ? 'bg-gray-900/95 backdrop-blur-sm shadow-lg' : 'bg-gray-900/80'
+          } py-3 -mx-2 px-2 border-b border-dark-700`}>
             {sections.map(section => (
               <button
                 key={section.key}
-                className={`flex flex-col items-center justify-center px-3 py-1 rounded-lg min-w-[80px] font-semibold text-xs transition-all duration-200 border-b-2 ${activeSection === section.key ? 'border-primary-500 text-primary-400 bg-primary-500/10' : 'border-transparent text-gray-400 hover:text-primary-400'}`}
+                className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg min-w-[90px] font-semibold text-xs transition-all duration-200 border-b-2 ${
+                  activeSection === section.key 
+                    ? 'border-primary-500 text-primary-400 bg-primary-500/10 shadow-lg' 
+                    : 'border-transparent text-gray-400 hover:text-primary-400 hover:bg-primary-500/5'
+                }`}
                 onClick={() => setActiveSection(section.key)}
+                title={section.description}
               >
                 <span className="mb-1">{section.icon}</span>
-                <span>{section.label}</span>
+                <span className="text-center leading-tight">{section.label}</span>
               </button>
             ))}
           </nav>
-          {/* Sidebar for Desktop */}
+          
+          {/* Enhanced Sidebar for Desktop */}
           <aside className="hidden md:block w-full md:w-64 mb-8 md:mb-0">
-            <nav className="flex flex-col gap-2 md:gap-4 overflow-y-auto max-h-[calc(100vh-120px)] bg-dark-900/90 shadow-lg rounded-xl p-2 custom-scrollbar sticky top-8" style={{ minHeight: '400px' }}>
+            <nav className="flex flex-col gap-2 md:gap-3 overflow-y-auto max-h-[calc(100vh-120px)] bg-dark-900/90 shadow-lg rounded-xl p-3 custom-scrollbar sticky top-8 border border-dark-700" style={{ minHeight: '400px' }}>
               {sections.map(section => (
                 <button
                   key={section.key}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg w-full text-left font-semibold text-xs transition-all duration-200 border border-transparent hover:bg-primary-500/10 hover:text-primary-400 ${activeSection === section.key ? 'bg-primary-500/20 text-primary-400 border-primary-500' : 'text-gray-300'}`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg w-full text-left font-semibold text-sm transition-all duration-200 border border-transparent hover:bg-primary-500/10 hover:text-primary-400 hover:border-primary-500/30 ${
+                    activeSection === section.key 
+                      ? 'bg-primary-500/20 text-primary-400 border-primary-500 shadow-lg' 
+                      : 'text-gray-300'
+                  }`}
                   onClick={() => setActiveSection(section.key)}
                   style={{ minWidth: '140px' }}
                   tabIndex={0}
                   aria-current={activeSection === section.key ? 'page' : undefined}
+                  title={section.description}
                 >
-                  {section.icon}
-                  <span>{section.label}</span>
+                  <span className="flex-shrink-0">{section.icon}</span>
+                  <span className="truncate">{section.label}</span>
+                  {activeSection === section.key && (
+                    <ChevronRight className="w-4 h-4 ml-auto flex-shrink-0" />
+                  )}
                 </button>
               ))}
             </nav>
           </aside>
-          {/* Main Content */}
+          
+          {/* Enhanced Main Content with Scroll */}
           <main className="flex-1 min-w-0 w-full">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.3 }}
+              className="h-full overflow-y-auto custom-scrollbar pr-2"
+            >
               <div className="space-y-6 w-full max-w-full">
-                {/* Card-style container for each section */}
-                <div className="space-y-6 w-full max-w-full">
+                {/* Enhanced section container with better spacing */}
+                <div className="space-y-8 w-full max-w-full">
                   {renderSection()}
                 </div>
               </div>

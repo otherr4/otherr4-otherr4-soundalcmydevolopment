@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, Shield, Activity, MapPin, User, Trash2, PauseCircle, LogOut, Key, Mail, Smartphone, Info, AlertTriangle, Settings as SettingsIcon, Eye, Users, CheckCircle, XCircle, ArrowLeft, Bell, Globe, CreditCard, HelpCircle, ShieldCheck, Database, Link2, Sliders, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
 import { doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
@@ -42,6 +43,7 @@ const sections = [
 
 const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState('overview');
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -59,6 +61,36 @@ const SettingsPage: React.FC = () => {
   const [emailError, setEmailError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  // Notification settings
+  const [notificationSettings, setNotificationSettings] = useState({
+    emailNotifications: true,
+    pushNotifications: true,
+    soundVibration: false,
+    messagePreviews: true,
+    collaborationAlerts: true,
+    systemUpdates: true,
+    marketingEmails: false,
+    securityAlerts: true
+  });
+
+  // Language and region settings
+  const [languageSettings, setLanguageSettings] = useState({
+    appLanguage: 'English',
+    dateTimeFormat: '24-hour',
+    currency: 'USD',
+    timezone: 'UTC'
+  });
+
+  // Personalization settings
+  const [personalizationSettings, setPersonalizationSettings] = useState({
+    autoPlayVideos: true,
+    showOnlineStatus: true,
+    compactMode: false,
+    animationsEnabled: true,
+    highContrast: false,
+    analyticsEnabled: true
+  });
 
   const realtimeDb = getDatabase();
   const [activityLog, setActivityLog] = useState<any[]>([]);
@@ -127,24 +159,9 @@ const SettingsPage: React.FC = () => {
   const [deactivated, setDeactivated] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [theme, setTheme] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') || 'dark';
-    }
-    return 'dark';
-  });
+  // Theme is now managed by ThemeContext
 
-  useEffect(() => {
-    document.documentElement.classList.remove('dark', 'light');
-    document.documentElement.classList.add(theme);
-    localStorage.setItem('theme', theme);
-    // Optionally: save to user profile if logged in
-    if (user) {
-      updateDoc(doc(db, 'users', user.uid), { theme }).catch(() => {});
-    }
-  }, [theme, user]);
-
-  // Load privacy settings from Firestore
+  // Load settings from Firestore
   useEffect(() => {
     if (!user) return;
     getDoc(doc(db, 'users', user.uid)).then(docSnap => {
@@ -153,6 +170,23 @@ const SettingsPage: React.FC = () => {
         setProfilePublic(d.profilePublic !== false);
         setOnlineStatus(d.onlineStatus !== false);
         setDeactivated(!!d.deactivated);
+        
+        // Load notification settings
+        if (d.notificationSettings) {
+          setNotificationSettings(prev => ({ ...prev, ...d.notificationSettings }));
+        }
+        
+        // Load language settings
+        if (d.languageSettings) {
+          setLanguageSettings(prev => ({ ...prev, ...d.languageSettings }));
+        }
+        
+        // Load personalization settings
+        if (d.personalizationSettings) {
+          setPersonalizationSettings(prev => ({ ...prev, ...d.personalizationSettings }));
+        }
+        
+        // Load theme from user data (handled by ThemeContext)
       }
     });
   }, [user]);
@@ -372,6 +406,43 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // Settings update functions
+  const updateNotificationSetting = async (key: string, value: boolean) => {
+    if (!user) return;
+    try {
+      const newSettings = { ...notificationSettings, [key]: value };
+      setNotificationSettings(newSettings);
+      await updateDoc(doc(db, 'users', user.uid), { notificationSettings: newSettings });
+      toast.success('Notification settings updated.');
+    } catch (e) {
+      toast.error('Failed to update notification settings.');
+    }
+  };
+
+  const updateLanguageSetting = async (key: string, value: string) => {
+    if (!user) return;
+    try {
+      const newSettings = { ...languageSettings, [key]: value };
+      setLanguageSettings(newSettings);
+      await updateDoc(doc(db, 'users', user.uid), { languageSettings: newSettings });
+      toast.success('Language settings updated.');
+    } catch (e) {
+      toast.error('Failed to update language settings.');
+    }
+  };
+
+  const updatePersonalizationSetting = async (key: string, value: boolean) => {
+    if (!user) return;
+    try {
+      const newSettings = { ...personalizationSettings, [key]: value };
+      setPersonalizationSettings(newSettings);
+      await updateDoc(doc(db, 'users', user.uid), { personalizationSettings: newSettings });
+      toast.success('Personalization settings updated.');
+    } catch (e) {
+      toast.error('Failed to update personalization settings.');
+    }
+  };
+
   // Section renderers
   const renderSection = () => {
     switch (activeSection) {
@@ -380,23 +451,39 @@ const SettingsPage: React.FC = () => {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><SettingsIcon className="text-primary-400" /> Settings Overview</h2>
             <p className="text-xs sm:text-sm text-gray-300">Manage your SoundAlchemy account settings, privacy, security, and more. Use the menu to navigate through different settings sections.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-full">
-              <div className="p-3 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-2 w-full max-w-full">
-                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><Shield /> Privacy & Security</h3>
-                <p className="text-xs text-gray-400">Control your privacy, enable 2FA, and review your activity log.</p>
-              </div>
-              <div className="p-3 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-2 w-full max-w-full">
-                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><User /> Account Management</h3>
-                <p className="text-xs text-gray-400">Change your email, password, and manage connected accounts.</p>
-              </div>
-              <div className="p-3 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-2 w-full max-w-full">
-                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><Activity /> Activity & Devices</h3>
-                <p className="text-xs text-gray-400">See your recent activity and manage your devices.</p>
-              </div>
-              <div className="p-3 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-2 w-full max-w-full">
-                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><AlertTriangle /> Advanced</h3>
-                <p className="text-xs text-gray-400">Delete or deactivate your account, and access advanced controls.</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-full">
+              {sections.filter(s => s.key !== 'overview').map(section => (
+                <button
+                  key={section.key}
+                  onClick={() => setActiveSection(section.key)}
+                  className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full hover:bg-dark-700/80 hover:border-primary-500 transition-all duration-200 text-left group"
+                >
+                  <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base group-hover:text-primary-300">
+                    {section.icon} {section.label}
+                  </h3>
+                  <p className="text-xs text-gray-400 group-hover:text-gray-300">
+                    {section.key === 'privacy' && 'Control your privacy, enable 2FA, and review your activity log.'}
+                    {section.key === 'account' && 'Change your email, password, and manage connected accounts.'}
+                    {section.key === 'activity' && 'See your recent activity and manage your devices.'}
+                    {section.key === 'notifications' && 'Manage your notification preferences and alerts.'}
+                    {section.key === 'language' && 'Set your language, region, and localization preferences.'}
+                    {section.key === 'subscription' && 'View and manage your subscription and billing information.'}
+                    {section.key === 'security' && 'Advanced security settings including 2FA and login alerts.'}
+                    {section.key === 'dataprivacy' && 'Download your data and manage privacy preferences.'}
+                    {section.key === 'policy' && 'Read our official app policy and terms of service.'}
+                    {section.key === 'integrations' && 'Connect third-party apps and manage API access.'}
+                    {section.key === 'personalization' && 'Customize your app experience and preferences.'}
+                    {section.key === 'support' && 'Get help, report issues, and contact support.'}
+                    {section.key === 'advanced' && 'Delete or deactivate your account, and access advanced controls.'}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-xs text-primary-500 group-hover:text-primary-400">
+                      {['subscription', 'integrations', 'personalization'].includes(section.key) ? 'Coming Soon' : 'Available'}
+                    </span>
+                    <ArrowLeft className="w-4 h-4 text-gray-500 group-hover:text-primary-400 transform rotate-180 transition-transform" />
+                  </div>
+                </button>
+              ))}
             </div>
           </motion.div>
         );
@@ -631,26 +718,64 @@ const SettingsPage: React.FC = () => {
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Bell className="text-primary-400" /> Notifications & Alerts</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Bell /> General Notifications</h3>
+                <div className="space-y-4">
+                  {Object.entries({
+                    emailNotifications: 'Email Notifications',
+                    pushNotifications: 'Push Notifications',
+                    soundVibration: 'Sound & Vibration',
+                    messagePreviews: 'Message Previews'
+                  }).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">{label}</span>
+                      <button
+                        onClick={() => updateNotificationSetting(key, !notificationSettings[key as keyof typeof notificationSettings])}
+                        className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                          notificationSettings[key as keyof typeof notificationSettings]
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                        }`}
+                      >
+                        {notificationSettings[key as keyof typeof notificationSettings] ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Shield /> Security & System</h3>
+                <div className="space-y-4">
+                  {Object.entries({
+                    collaborationAlerts: 'Collaboration Alerts',
+                    systemUpdates: 'System Updates',
+                    securityAlerts: 'Security Alerts',
+                    marketingEmails: 'Marketing Emails'
+                  }).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">{label}</span>
+                      <button
+                        onClick={() => updateNotificationSetting(key, !notificationSettings[key as keyof typeof notificationSettings])}
+                        className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                          notificationSettings[key as keyof typeof notificationSettings]
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                        }`}
+                      >
+                        {notificationSettings[key as keyof typeof notificationSettings] ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Bell /> Notification Preferences</h3>
-              <ul className="space-y-3">
-                <li className="flex items-center justify-between">
-                  <span>Email Notifications</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Push Notifications</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Sound & Vibration</span>
-                  <button className="px-3 py-1 rounded-full bg-gray-600 text-gray-200 font-bold">Off</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Message Previews</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
-                </li>
-              </ul>
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Info /> Notification Info</h3>
+              <p className="text-xs text-gray-400">
+                Manage how you receive notifications from SoundAlchemy. Email notifications are sent to your registered email address. 
+                Push notifications require browser permission and work when you're online.
+              </p>
             </div>
           </motion.div>
         );
@@ -658,22 +783,87 @@ const SettingsPage: React.FC = () => {
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Globe className="text-primary-400" /> Language & Region</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Globe /> Language Settings</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">App Language</span>
+                    <select
+                      value={languageSettings.appLanguage}
+                      onChange={(e) => updateLanguageSetting('appLanguage', e.target.value)}
+                      className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1 text-white text-xs focus:outline-none focus:ring-2 focus:ring-primary-400"
+                    >
+                      <option value="English">English</option>
+                      <option value="Spanish">Español</option>
+                      <option value="French">Français</option>
+                      <option value="German">Deutsch</option>
+                      <option value="Italian">Italiano</option>
+                      <option value="Portuguese">Português</option>
+                      <option value="Japanese">日本語</option>
+                      <option value="Korean">한국어</option>
+                      <option value="Chinese">中文</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Timezone</span>
+                    <select
+                      value={languageSettings.timezone}
+                      onChange={(e) => updateLanguageSetting('timezone', e.target.value)}
+                      className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1 text-white text-xs focus:outline-none focus:ring-2 focus:ring-primary-400"
+                    >
+                      <option value="UTC">UTC</option>
+                      <option value="America/New_York">Eastern Time</option>
+                      <option value="America/Chicago">Central Time</option>
+                      <option value="America/Denver">Mountain Time</option>
+                      <option value="America/Los_Angeles">Pacific Time</option>
+                      <option value="Europe/London">London</option>
+                      <option value="Europe/Paris">Paris</option>
+                      <option value="Asia/Tokyo">Tokyo</option>
+                      <option value="Asia/Seoul">Seoul</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><MapPin /> Regional Settings</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Date/Time Format</span>
+                    <select
+                      value={languageSettings.dateTimeFormat}
+                      onChange={(e) => updateLanguageSetting('dateTimeFormat', e.target.value)}
+                      className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1 text-white text-xs focus:outline-none focus:ring-2 focus:ring-primary-400"
+                    >
+                      <option value="12-hour">12-hour (AM/PM)</option>
+                      <option value="24-hour">24-hour</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Currency</span>
+                    <select
+                      value={languageSettings.currency}
+                      onChange={(e) => updateLanguageSetting('currency', e.target.value)}
+                      className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1 text-white text-xs focus:outline-none focus:ring-2 focus:ring-primary-400"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="JPY">JPY (¥)</option>
+                      <option value="KRW">KRW (₩)</option>
+                      <option value="CAD">CAD ($)</option>
+                      <option value="AUD">AUD ($)</option>
+                      <option value="CHF">CHF</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Globe /> Language & Regional Settings</h3>
-              <ul className="space-y-3">
-                <li className="flex items-center justify-between">
-                  <span>App Language</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">English</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Date/Time Format</span>
-                  <button className="px-3 py-1 rounded-full bg-gray-600 text-gray-200 font-bold">24-hour</button>
-                </li>
-                <li className="flex items-center justify-between">
-                  <span>Currency</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">USD</button>
-                </li>
-              </ul>
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Info /> Language Info</h3>
+              <p className="text-xs text-gray-400">
+                Language changes will take effect after refreshing the page. Regional settings affect how dates, times, and currency are displayed throughout the app.
+              </p>
             </div>
           </motion.div>
         );
@@ -681,80 +871,682 @@ const SettingsPage: React.FC = () => {
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><CreditCard className="text-primary-400" /> Subscription & Billing</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full flex flex-col gap-4 items-center justify-center min-h-[180px]">
-              <span className="inline-block px-4 py-2 rounded-full bg-yellow-500/20 text-yellow-400 font-bold text-xs mb-2">Coming Soon</span>
-              <p className="text-xs text-gray-400 text-center">Subscription management features are coming soon. You will be able to view and manage your plan, payment methods, and invoices here.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><User /> Current Plan</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Plan Type</span>
+                    <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 font-bold text-xs">Free</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Status</span>
+                    <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 font-bold text-xs">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Next Billing</span>
+                    <span className="text-xs text-gray-400">N/A</span>
+                  </div>
+                </div>
+                <button className="w-full mt-4 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-bold text-xs transition-colors">
+                  Upgrade Plan
+                </button>
+              </div>
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><CreditCard /> Payment Methods</h3>
+                <div className="space-y-3">
+                  <div className="text-center py-8">
+                    <CreditCard className="w-12 h-12 text-gray-500 mx-auto mb-2" />
+                    <p className="text-xs text-gray-400">No payment methods added</p>
+                  </div>
+                </div>
+                <button className="w-full mt-4 px-4 py-2 bg-dark-600 hover:bg-dark-500 text-gray-300 rounded-lg font-bold text-xs transition-colors">
+                  Add Payment Method
+                </button>
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Info /> Billing History</h3>
+              <div className="text-center py-8">
+                <div className="text-gray-500 mb-2">📄</div>
+                <p className="text-xs text-gray-400">No billing history available</p>
+                <p className="text-xs text-gray-500 mt-1">Invoices and receipts will appear here once you upgrade</p>
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 w-full max-w-full">
+              <h3 className="font-semibold text-yellow-400 flex items-center gap-2 mb-2"><AlertTriangle /> Coming Soon</h3>
+              <p className="text-xs text-yellow-300">
+                Full subscription management including premium plans, payment processing, and billing history is currently in development. 
+                Stay tuned for updates!
+              </p>
             </div>
           </motion.div>
         );
       case 'security':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><ShieldCheck className="text-primary-400" /> Security Center</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><Key /> Two-Factor Authentication (2FA)</h3>
-              <p className="text-gray-400 text-xs">Add an extra layer of security to your account. (Coming soon)</p>
-              <button className="btn-primary px-3 py-2 rounded-lg text-xs w-full max-w-xs mt-2 opacity-60 cursor-not-allowed">Enable 2FA</button>
+            
+            {/* Security Status Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-center">
+                <ShieldCheck className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                <h3 className="font-semibold text-green-400 text-sm">Account Secure</h3>
+                <p className="text-xs text-green-300 mt-1">Your account is protected</p>
+              </div>
+              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-center">
+                <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-2" />
+                <h3 className="font-semibold text-yellow-400 text-sm">2FA Disabled</h3>
+                <p className="text-xs text-yellow-300 mt-1">Enable for better security</p>
+              </div>
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30 text-center">
+                <Activity className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                <h3 className="font-semibold text-blue-400 text-sm">Active Sessions</h3>
+                <p className="text-xs text-blue-300 mt-1">{devices.length} device(s)</p>
+              </div>
             </div>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><Bell /> Login Alerts</h3>
-              <p className="text-gray-400 text-xs">Get notified when your account is accessed from a new device.</p>
-              <button className="btn-primary px-3 py-2 rounded-lg text-xs w-full max-w-xs mt-2">Manage Alerts</button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              {/* Two-Factor Authentication */}
+              <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Key /> Two-Factor Authentication</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">SMS Authentication</p>
+                      <p className="text-xs text-gray-400">Receive codes via text message</p>
+                    </div>
+                    <span className="px-2 py-1 bg-gray-600/20 text-gray-400 rounded text-xs">Coming Soon</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Authenticator App</p>
+                      <p className="text-xs text-gray-400">Use Google Authenticator or similar</p>
+                    </div>
+                    <span className="px-2 py-1 bg-gray-600/20 text-gray-400 rounded text-xs">Coming Soon</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Email Authentication</p>
+                      <p className="text-xs text-gray-400">Receive codes via email</p>
+                    </div>
+                    <span className="px-2 py-1 bg-gray-600/20 text-gray-400 rounded text-xs">Coming Soon</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Login Security */}
+              <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Bell /> Login Security</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Login Alerts</p>
+                      <p className="text-xs text-gray-400">Get notified of new device logins</p>
+                    </div>
+                    <button
+                      onClick={() => updateNotificationSetting('securityAlerts', !notificationSettings.securityAlerts)}
+                      className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                        notificationSettings.securityAlerts
+                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                      }`}
+                    >
+                      {notificationSettings.securityAlerts ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Suspicious Activity</p>
+                      <p className="text-xs text-gray-400">Monitor unusual login patterns</p>
+                    </div>
+                    <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Password Strength</p>
+                      <p className="text-xs text-gray-400">Current password security level</p>
+                    </div>
+                    <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Strong</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Recommendations */}
+            <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Shield /> Security Recommendations</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-200">Completed:</h4>
+                  <ul className="space-y-2">
+                    <li className="flex items-center gap-2 text-xs text-green-400">
+                      <CheckCircle className="w-4 h-4" />
+                      Strong password set
+                    </li>
+                    <li className="flex items-center gap-2 text-xs text-green-400">
+                      <CheckCircle className="w-4 h-4" />
+                      Email verified
+                    </li>
+                    <li className="flex items-center gap-2 text-xs text-green-400">
+                      <CheckCircle className="w-4 h-4" />
+                      Login alerts enabled
+                    </li>
+                  </ul>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-200">Recommended:</h4>
+                  <ul className="space-y-2">
+                    <li className="flex items-center gap-2 text-xs text-yellow-400">
+                      <AlertTriangle className="w-4 h-4" />
+                      Enable two-factor authentication
+                    </li>
+                    <li className="flex items-center gap-2 text-xs text-yellow-400">
+                      <AlertTriangle className="w-4 h-4" />
+                      Review active sessions
+                    </li>
+                    <li className="flex items-center gap-2 text-xs text-yellow-400">
+                      <AlertTriangle className="w-4 h-4" />
+                      Update recovery information
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Activity */}
+            <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Activity /> Recent Security Activity</h3>
+              <div className="space-y-3">
+                {activityLog.slice(0, 5).map((log, index) => {
+                  const details = getDeviceDetails(log.deviceInfo || {});
+                  const location = log.location?.country || log.location?.city
+                    ? `${log.location?.city ? log.location.city + ', ' : ''}${log.location?.country || ''}`
+                    : 'Unknown location';
+                  return (
+                    <div key={log.id || index} className="flex items-center justify-between p-3 bg-dark-700/30 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-primary-500/20 rounded-full flex items-center justify-center">
+                          <Shield className="w-4 h-4 text-primary-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-200">{getActionLabel(log.type || 'Unknown')}</p>
+                          <p className="text-xs text-gray-400">
+                            {details.browser} • {location} • {log.timestamp?._seconds ? new Date(log.timestamp._seconds * 1000).toLocaleDateString() : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Verified</span>
+                    </div>
+                  );
+                })}
+                {activityLog.length === 0 && (
+                  <p className="text-center text-gray-500 py-4 text-sm">No recent security activity</p>
+                )}
+              </div>
             </div>
           </motion.div>
         );
       case 'dataprivacy':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Database className="text-primary-400" /> Data & Privacy</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><Info /> Download Your Data</h3>
-              <button className="btn-primary px-3 py-2 rounded-lg text-xs w-full max-w-xs mt-2">Download</button>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              {/* Data Export */}
+              <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Info /> Export Your Data</h3>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-300">
+                    Download a copy of your SoundAlchemy data including profile information, music files, collaborations, and activity history.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                      <span className="text-sm text-gray-200">Profile Data</span>
+                      <span className="text-xs text-gray-400">JSON format</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                      <span className="text-sm text-gray-200">Music Files</span>
+                      <span className="text-xs text-gray-400">Original formats</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                      <span className="text-sm text-gray-200">Activity Log</span>
+                      <span className="text-xs text-gray-400">CSV format</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={handleDownloadData}
+                      disabled={downloading}
+                      className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs transition-colors"
+                    >
+                      {downloading ? 'Downloading...' : 'Download Profile Data'}
+                    </button>
+                    <button 
+                      onClick={handleExportActivity}
+                      disabled={exporting}
+                      className="flex-1 px-4 py-2 bg-secondary-600 hover:bg-secondary-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs transition-colors"
+                    >
+                      {exporting ? 'Exporting...' : 'Export Activity'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Privacy Controls */}
+              <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Shield /> Privacy Controls</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Profile Visibility</p>
+                      <p className="text-xs text-gray-400">Control who can see your profile</p>
+                    </div>
+                    <button
+                      onClick={handleProfilePublicToggle}
+                      className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                        profilePublic
+                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                      }`}
+                    >
+                      {profilePublic ? 'Public' : 'Private'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Online Status</p>
+                      <p className="text-xs text-gray-400">Show when you're active</p>
+                    </div>
+                    <button
+                      onClick={handleOnlineStatusToggle}
+                      className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                        onlineStatus
+                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                      }`}
+                    >
+                      {onlineStatus ? 'Visible' : 'Hidden'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">Data Analytics</p>
+                      <p className="text-xs text-gray-400">Help improve our services</p>
+                    </div>
+                    <button
+                      onClick={() => updatePersonalizationSetting('analyticsEnabled', !personalizationSettings.analyticsEnabled)}
+                      className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                        personalizationSettings.analyticsEnabled
+                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                      }`}
+                    >
+                      {personalizationSettings.analyticsEnabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base"><Shield /> Data Sharing Preferences</h3>
-              <p className="text-gray-400 text-xs">Control how your data is shared with third parties.</p>
-              <button className="btn-primary px-3 py-2 rounded-lg text-xs w-full max-w-xs mt-2">Manage Sharing</button>
+
+            {/* Data Retention */}
+            <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Database /> Data Retention Policy</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-dark-700/30 rounded-lg">
+                  <h4 className="font-medium text-gray-200 mb-2">Profile Data</h4>
+                  <p className="text-xs text-gray-400">Stored until account deletion</p>
+                  <p className="text-xs text-primary-400 mt-1">Permanent</p>
+                </div>
+                <div className="p-4 bg-dark-700/30 rounded-lg">
+                  <h4 className="font-medium text-gray-200 mb-2">Activity Logs</h4>
+                  <p className="text-xs text-gray-400">Kept for security purposes</p>
+                  <p className="text-xs text-primary-400 mt-1">90 days</p>
+                </div>
+                <div className="p-4 bg-dark-700/30 rounded-lg">
+                  <h4 className="font-medium text-gray-200 mb-2">Music Files</h4>
+                  <p className="text-xs text-gray-400">Stored with your content</p>
+                  <p className="text-xs text-primary-400 mt-1">Until deleted</p>
+                </div>
+              </div>
+            </div>
+
+            {/* GDPR Compliance */}
+            <div className="p-6 rounded-lg bg-blue-500/10 border border-blue-500/30 w-full max-w-full">
+              <h3 className="font-semibold text-blue-400 flex items-center gap-2 text-lg mb-4"><ShieldCheck /> Your Rights (GDPR)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-blue-300">Data Subject Rights:</h4>
+                  <ul className="space-y-1 text-xs text-blue-200">
+                    <li>• Right to access your personal data</li>
+                    <li>• Right to rectification (correction)</li>
+                    <li>• Right to erasure ("right to be forgotten")</li>
+                    <li>• Right to restrict processing</li>
+                  </ul>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-medium text-blue-300">Additional Rights:</h4>
+                  <ul className="space-y-1 text-xs text-blue-200">
+                    <li>• Right to data portability</li>
+                    <li>• Right to object to processing</li>
+                    <li>• Rights related to automated decision making</li>
+                    <li>• Right to lodge a complaint</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-4 text-xs text-blue-300">
+                <p>To exercise any of these rights, please contact our Data Protection Officer at privacy@soundalchemy.com</p>
+              </div>
             </div>
           </motion.div>
         );
       case 'policy':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Info className="text-primary-400" /> App Policy</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full">
-              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-base">Official App Policy</h3>
-              <p className="text-gray-300 text-sm">
-                Welcome to SoundAlchemy. We are committed to protecting your privacy and ensuring the security of your data. Our platform uses industry-standard security practices, including encryption, secure authentication, and regular audits. We do not share your personal data with third parties without your consent. You have full control over your data, can download or delete your information at any time, and can contact support for any privacy concerns. For more details, please review our full Privacy Policy and Terms of Service.
+            
+            {/* Privacy Policy Section */}
+            <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Shield /> Privacy Policy</h3>
+              <div className="space-y-4 text-sm text-gray-300">
+                <p>
+                  <strong>SoundAlchemy</strong> is committed to protecting your privacy and ensuring the security of your personal information. 
+                  This Privacy Policy explains how we collect, use, and safeguard your data when you use our music collaboration platform.
+                </p>
+                
+                <div>
+                  <h4 className="font-semibold text-primary-300 mb-2">Information We Collect:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs">
+                    <li>Account information (name, email, profile details)</li>
+                    <li>Music content and collaboration data</li>
+                    <li>Usage analytics and performance metrics</li>
+                    <li>Device and browser information for security</li>
+                    <li>Communication data (messages, comments)</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-primary-300 mb-2">How We Use Your Data:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs">
+                    <li>Provide and improve our music collaboration services</li>
+                    <li>Facilitate connections between musicians worldwide</li>
+                    <li>Ensure platform security and prevent abuse</li>
+                    <li>Send important service updates and notifications</li>
+                    <li>Analyze usage patterns to enhance user experience</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-primary-300 mb-2">Data Protection:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs">
+                    <li>All data is encrypted in transit and at rest using AES-256</li>
+                    <li>Regular security audits and penetration testing</li>
+                    <li>GDPR, CCPA, and international privacy law compliance</li>
+                    <li>Secure authentication with optional 2FA</li>
+                    <li>Data minimization and retention policies</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Terms of Service Section */}
+            <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><CheckCircle /> Terms of Service</h3>
+              <div className="space-y-4 text-sm text-gray-300">
+                <div>
+                  <h4 className="font-semibold text-primary-300 mb-2">Acceptable Use:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs">
+                    <li>Use SoundAlchemy for legitimate music collaboration purposes</li>
+                    <li>Respect intellectual property rights of all users</li>
+                    <li>Maintain professional and respectful communication</li>
+                    <li>Do not upload copyrighted content without permission</li>
+                    <li>Report any suspicious or inappropriate behavior</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-primary-300 mb-2">Content Ownership:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs">
+                    <li>You retain ownership of your original music content</li>
+                    <li>Collaborative works are jointly owned by contributors</li>
+                    <li>SoundAlchemy has limited license to display and process content</li>
+                    <li>Users grant permission for platform functionality</li>
+                    <li>Respect for all participants' creative contributions</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-primary-300 mb-2">Platform Responsibilities:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs">
+                    <li>Maintain service availability and performance</li>
+                    <li>Provide secure and reliable data storage</li>
+                    <li>Offer customer support and technical assistance</li>
+                    <li>Continuously improve platform features</li>
+                    <li>Enforce community guidelines and safety measures</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Data Rights Section */}
+            <div className="p-6 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 text-lg mb-4"><Database /> Your Data Rights</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-primary-300">Access & Control:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs text-gray-300">
+                    <li>Download all your personal data</li>
+                    <li>Update or correct information</li>
+                    <li>Delete your account and data</li>
+                    <li>Control privacy settings</li>
+                  </ul>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-primary-300">Data Portability:</h4>
+                  <ul className="list-disc ml-6 space-y-1 text-xs text-gray-300">
+                    <li>Export data in standard formats</li>
+                    <li>Transfer to other platforms</li>
+                    <li>Backup your music projects</li>
+                    <li>Maintain collaboration history</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact & Compliance */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+                <h3 className="font-semibold text-green-400 flex items-center gap-2 mb-3"><ShieldCheck /> Security Certified</h3>
+                <ul className="space-y-1 text-xs text-green-300">
+                  <li>✓ SOC 2 Type II Compliant</li>
+                  <li>✓ GDPR & CCPA Compliant</li>
+                  <li>✓ ISO 27001 Security Standards</li>
+                  <li>✓ Regular Security Audits</li>
+                  <li>✓ 99.9% Uptime SLA</li>
+                </ul>
+              </div>
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <h3 className="font-semibold text-blue-400 flex items-center gap-2 mb-3"><Mail /> Contact Us</h3>
+                <div className="space-y-2 text-xs text-blue-300">
+                  <p><strong>Privacy Officer:</strong> privacy@soundalchemy.com</p>
+                  <p><strong>Security Team:</strong> security@soundalchemy.com</p>
+                  <p><strong>General Support:</strong> support@soundalchemy.com</p>
+                  <p><strong>Legal Inquiries:</strong> legal@soundalchemy.com</p>
+                  <p className="mt-3 text-gray-400">Response time: 24-48 hours</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-dark-700/50 border border-dark-600 text-center">
+              <p className="text-xs text-gray-400">
+                <strong>Last Updated:</strong> December 2024 | 
+                <strong> Version:</strong> 2.1 | 
+                <strong> Effective Date:</strong> January 1, 2025
               </p>
-              <ul className="list-disc ml-6 text-gray-300 space-y-2 mt-2">
-                <li>All user data is encrypted and securely stored.</li>
-                <li>We comply with GDPR and other international privacy laws.</li>
-                <li>Two-factor authentication (2FA) is available for enhanced security.</li>
-                <li>You can request data deletion or export at any time.</li>
-                <li>Contact support for any privacy or security questions.</li>
-              </ul>
-              <div className="mt-4 text-xs text-gray-400">Last updated: June 2024</div>
+              <p className="text-xs text-gray-500 mt-2">
+                By using SoundAlchemy, you agree to our Privacy Policy and Terms of Service. 
+                We will notify you of any material changes to these policies.
+              </p>
             </div>
           </motion.div>
         );
       case 'integrations':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Link2 className="text-primary-400" /> Integrations</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full items-center justify-center min-h-[120px]">
-              <span className="inline-block px-4 py-2 rounded-full bg-yellow-500/20 text-yellow-400 font-bold text-xs mb-2">Coming Soon</span>
-              <p className="text-xs text-gray-400 text-center">Integrations with third-party apps and API keys will be available soon.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Link2 /> Connected Services</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                        <span className="text-white font-bold text-xs">YT</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-200">YouTube</p>
+                        <p className="text-xs text-gray-400">Music platform integration</p>
+                      </div>
+                    </div>
+                    <button className="px-3 py-1 bg-dark-600 hover:bg-dark-500 text-gray-300 rounded-lg font-bold text-xs transition-colors">
+                      Connect
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                        <span className="text-white font-bold text-xs">SP</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-200">Spotify</p>
+                        <p className="text-xs text-gray-400">Music streaming service</p>
+                      </div>
+                    </div>
+                    <button className="px-3 py-1 bg-dark-600 hover:bg-dark-500 text-gray-300 rounded-lg font-bold text-xs transition-colors">
+                      Connect
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                        <span className="text-white font-bold text-xs">DC</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-200">Discord</p>
+                        <p className="text-xs text-gray-400">Community integration</p>
+                      </div>
+                    </div>
+                    <button className="px-3 py-1 bg-dark-600 hover:bg-dark-500 text-gray-300 rounded-lg font-bold text-xs transition-colors">
+                      Connect
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Key /> API Access</h3>
+                <div className="space-y-4">
+                  <div className="text-center py-8">
+                    <Key className="w-12 h-12 text-gray-500 mx-auto mb-2" />
+                    <p className="text-xs text-gray-400">No API keys generated</p>
+                  </div>
+                  <button className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-bold text-xs transition-colors">
+                    Generate API Key
+                  </button>
+                  <div className="text-xs text-gray-400">
+                    <p>API keys allow third-party applications to access your SoundAlchemy data securely.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 w-full max-w-full">
+              <h3 className="font-semibold text-yellow-400 flex items-center gap-2 mb-2"><AlertTriangle /> Coming Soon</h3>
+              <p className="text-xs text-yellow-300">
+                Full integration functionality including OAuth connections, webhook management, and API key generation is currently in development. 
+                These features will be available in future updates.
+              </p>
             </div>
           </motion.div>
         );
       case 'personalization':
         return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 w-full max-w-full">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 w-full max-w-full">
             <h2 className="text-lg md:text-xl font-bold flex items-center gap-2"><Sliders className="text-primary-400" /> Personalization</h2>
-            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 shadow-md flex flex-col gap-3 w-full max-w-full items-center justify-center min-h-[120px]">
-              <span className="inline-block px-4 py-2 rounded-full bg-yellow-500/20 text-yellow-400 font-bold text-xs mb-2">Coming Soon</span>
-              <p className="text-xs text-gray-400 text-center">Personalization options (theme, layout, notification sounds) are coming soon.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-full">
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Eye /> Display Preferences</h3>
+                <div className="space-y-4">
+                  {Object.entries({
+                    autoPlayVideos: 'Auto-play Videos',
+                    showOnlineStatus: 'Show Online Status',
+                    compactMode: 'Compact Mode',
+                    animationsEnabled: 'Enable Animations'
+                  }).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-300">{label}</span>
+                      <button
+                        onClick={() => updatePersonalizationSetting(key, !personalizationSettings[key as keyof typeof personalizationSettings])}
+                        className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                          personalizationSettings[key as keyof typeof personalizationSettings]
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                        }`}
+                      >
+                        {personalizationSettings[key as keyof typeof personalizationSettings] ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+                <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-4"><Sliders /> Accessibility</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">High Contrast</span>
+                    <button
+                      onClick={() => updatePersonalizationSetting('highContrast', !personalizationSettings.highContrast)}
+                      className={`px-3 py-1 rounded-full font-bold text-xs transition-colors ${
+                        personalizationSettings.highContrast
+                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                      }`}
+                    >
+                      {personalizationSettings.highContrast ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Theme</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setTheme('light')}
+                        className={`p-2 rounded-lg border transition-colors ${
+                          theme === 'light'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-gray-600 bg-dark-700 text-gray-400 hover:border-gray-500'
+                        }`}
+                      >
+                        <Sun className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setTheme('dark')}
+                        className={`p-2 rounded-lg border transition-colors ${
+                          theme === 'dark'
+                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                            : 'border-gray-600 bg-dark-700 text-gray-400 hover:border-gray-500'
+                        }`}
+                      >
+                        <Moon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-dark-800/80 border border-primary-700 w-full max-w-full">
+              <h3 className="font-semibold text-primary-400 flex items-center gap-2 mb-2"><Info /> Personalization Info</h3>
+              <p className="text-xs text-gray-400">
+                Customize your SoundAlchemy experience with these personalization options. Theme changes apply immediately, 
+                while other settings may require a page refresh to take full effect.
+              </p>
             </div>
           </motion.div>
         );
@@ -895,15 +1687,15 @@ const SettingsPage: React.FC = () => {
         </div>
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full py-8 px-2 sm:px-4 md:px-8 gap-8">
           {/* Mobile Tab Bar for Section Navigation */}
-          <nav className="flex md:hidden gap-2 mb-6 overflow-x-auto no-scrollbar sticky top-0 z-20 bg-gray-900/95 py-2 -mx-2 px-2 border-b border-dark-700">
+          <nav className="flex md:hidden gap-2 mb-6 overflow-x-auto custom-scrollbar-horizontal sticky top-0 z-20 bg-gray-900/95 backdrop-blur-sm py-3 -mx-2 px-2 border-b border-dark-700 shadow-lg">
             {sections.map(section => (
               <button
                 key={section.key}
-                className={`flex flex-col items-center justify-center px-3 py-1 rounded-lg min-w-[80px] font-semibold text-xs transition-all duration-200 border-b-2 ${activeSection === section.key ? 'border-primary-500 text-primary-400 bg-primary-500/10' : 'border-transparent text-gray-400 hover:text-primary-400'}`}
+                className={`flex flex-col items-center justify-center px-4 py-2 rounded-lg min-w-[90px] font-semibold text-xs transition-all duration-300 border-2 whitespace-nowrap ${activeSection === section.key ? 'border-primary-500 text-primary-400 bg-primary-500/20 shadow-lg transform scale-105' : 'border-transparent text-gray-400 hover:text-primary-400 hover:bg-primary-500/5 hover:border-primary-700'}`}
                 onClick={() => setActiveSection(section.key)}
               >
-                <span className="mb-1">{section.icon}</span>
-                <span>{section.label}</span>
+                <span className="mb-1 text-base">{section.icon}</span>
+                <span className="text-xs leading-tight">{section.label}</span>
               </button>
             ))}
           </nav>
@@ -927,11 +1719,18 @@ const SettingsPage: React.FC = () => {
           </aside>
           {/* Main Content */}
           <main className="flex-1 min-w-0 w-full">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-              <div className="space-y-6 w-full max-w-full">
-                {/* Card-style container for each section */}
-                <div className="space-y-6 w-full max-w-full">
-                  {renderSection()}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.3 }}
+              className="h-full"
+            >
+              <div className="space-y-6 w-full max-w-full h-full">
+                {/* Card-style container for each section with enhanced scrolling */}
+                <div className="space-y-6 w-full max-w-full max-h-[calc(100vh-200px)] md:max-h-[calc(100vh-160px)] overflow-y-auto custom-scrollbar pr-2">
+                  <div className="pb-8">
+                    {renderSection()}
+                  </div>
                 </div>
               </div>
             </motion.div>

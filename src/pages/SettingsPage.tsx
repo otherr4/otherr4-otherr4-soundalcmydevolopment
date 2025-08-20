@@ -60,6 +60,25 @@ const SettingsPage: React.FC = () => {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  // Notification preferences state (default values will be overridden by Firestore data)
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [pushNotifications, setPushNotifications] = useState(true);
+  const [soundVibration, setSoundVibration] = useState(false);
+  const [messagePreviews, setMessagePreviews] = useState(true);
+
+  // Helper to update a single notification preference in Firestore
+  const updateNotificationPref = async (key: string, value: boolean) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        [`notifications.${key}`]: value,
+      });
+      toast.success('Notification preference updated.');
+    } catch (e) {
+      toast.error('Failed to update preference.');
+    }
+  };
+
   const realtimeDb = getDatabase();
   const [activityLog, setActivityLog] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
@@ -153,6 +172,11 @@ const SettingsPage: React.FC = () => {
         setProfilePublic(d.profilePublic !== false);
         setOnlineStatus(d.onlineStatus !== false);
         setDeactivated(!!d.deactivated);
+        // Notification preferences (fallback to sensible defaults)
+        setEmailNotifications(d.notifications?.email !== false);
+        setPushNotifications(d.notifications?.push !== false);
+        setSoundVibration(!!d.notifications?.sound);
+        setMessagePreviews(d.notifications?.preview !== false);
       }
     });
   }, [user]);
@@ -636,19 +660,47 @@ const SettingsPage: React.FC = () => {
               <ul className="space-y-3">
                 <li className="flex items-center justify-between">
                   <span>Email Notifications</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
+                  <button
+                    onClick={() => {
+                      const newVal = !emailNotifications;
+                      setEmailNotifications(newVal);
+                      updateNotificationPref('email', newVal);
+                    }}
+                    className={`px-3 py-1 rounded-full font-bold transition-colors ${emailNotifications ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-200'}`}
+                  >{emailNotifications ? 'On' : 'Off'}</button>
                 </li>
                 <li className="flex items-center justify-between">
                   <span>Push Notifications</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
+                  <button
+                    onClick={() => {
+                      const newVal = !pushNotifications;
+                      setPushNotifications(newVal);
+                      updateNotificationPref('push', newVal);
+                    }}
+                    className={`px-3 py-1 rounded-full font-bold transition-colors ${pushNotifications ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-200'}`}
+                  >{pushNotifications ? 'On' : 'Off'}</button>
                 </li>
                 <li className="flex items-center justify-between">
                   <span>Sound & Vibration</span>
-                  <button className="px-3 py-1 rounded-full bg-gray-600 text-gray-200 font-bold">Off</button>
+                  <button
+                    onClick={() => {
+                      const newVal = !soundVibration;
+                      setSoundVibration(newVal);
+                      updateNotificationPref('sound', newVal);
+                    }}
+                    className={`px-3 py-1 rounded-full font-bold transition-colors ${soundVibration ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-200'}`}
+                  >{soundVibration ? 'On' : 'Off'}</button>
                 </li>
                 <li className="flex items-center justify-between">
                   <span>Message Previews</span>
-                  <button className="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 font-bold">On</button>
+                  <button
+                    onClick={() => {
+                      const newVal = !messagePreviews;
+                      setMessagePreviews(newVal);
+                      updateNotificationPref('preview', newVal);
+                    }}
+                    className={`px-3 py-1 rounded-full font-bold transition-colors ${messagePreviews ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-200'}`}
+                  >{messagePreviews ? 'On' : 'Off'}</button>
                 </li>
               </ul>
             </div>

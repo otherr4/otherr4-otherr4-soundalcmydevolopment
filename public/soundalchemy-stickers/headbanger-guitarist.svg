@@ -1,0 +1,23 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <animateTransform xlink:href="#head" attributeName="transform" type="rotate" values="0 60 40; -15 60 40; 15 60 40; -15 60 40; 15 60 40; 0 60 40" dur="0.8s" repeatCount="indefinite"/>
+    <animateTransform xlink:href="#hair" attributeName="transform" type="rotate" values="0 60 25; -20 60 25; 20 60 25; -20 60 25; 20 60 25; 0 60 25" dur="0.8s" repeatCount="indefinite"/>
+  </defs>
+  <rect width="120" height="120" rx="20" fill="#2C1810"/>
+  <g id="hair">
+    <path d="M30 15 Q50 -5 60 15 Q70 -5 90 15" stroke="#FF6B6B" stroke-width="8" fill="none"/>
+  </g>
+  <g id="head">
+    <circle cx="60" cy="45" r="25" fill="#FFD93D"/>
+    <circle cx="55" cy="40" r="4" fill="#333"/>
+    <circle cx="65" cy="40" r="4" fill="#333"/>
+    <path d="M55 50 Q60 55 65 50" stroke="#333" stroke-width="2" fill="none"/>
+    <g id="horns">
+      <path d="M50 25 L45 15 L50 20 L55 15 L50 25" fill="#FF6B6B"/>
+      <path d="M70 25 L65 15 L70 20 L75 15 L70 25" fill="#FF6B6B"/>
+    </g>
+  </g>
+  <ellipse cx="60" cy="95" rx="30" ry="12" fill="#8B4513"/>
+  <rect x="50" y="45" width="20" height="45" fill="#8B4513"/>
+  <text x="60" y="115" text-anchor="middle" fill="#E94560" font-family="Arial" font-size="14" font-weight="bold">HEADBANG!</text>
+</svg>

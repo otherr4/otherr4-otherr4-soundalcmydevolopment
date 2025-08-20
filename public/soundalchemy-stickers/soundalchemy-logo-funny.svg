@@ -1,0 +1,13 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="20" fill="#6366F1"/>
+  <circle cx="60" cy="50" r="25" fill="#E94560"/>
+  <circle cx="60" cy="50" r="20" fill="#FFD93D"/>
+  <circle cx="55" cy="45" r="3" fill="#333"/>
+  <circle cx="65" cy="45" r="3" fill="#333"/>
+  <path d="M55 55 Q60 60 65 55" stroke="#333" stroke-width="2" fill="none"/>
+  <path d="M30 30 Q35 25 40 30 L40 40 Q35 45 30 40 Z" fill="#FFD93D"/>
+  <circle cx="40" cy="40" r="2" fill="#FFD93D"/>
+  <path d="M80 30 Q85 25 90 30 L90 40 Q85 45 80 40 Z" fill="#FFD93D"/>
+  <circle cx="90" cy="40" r="2" fill="#FFD93D"/>
+  <text x="60" y="110" text-anchor="middle" fill="#FFD93D" font-family="Arial" font-size="12" font-weight="bold">SOUNDALCHEMY!</text>
+</svg>

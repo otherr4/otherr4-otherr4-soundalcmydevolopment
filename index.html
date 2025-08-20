@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Title + SEO Meta -->
+  <title>SoundAlcmy – Unite Global Musicians</title>
+  <meta name="description" content="SoundAlcmy is a global music platform where artists from all cultures unite to collaborate and create breathtaking music. Founded by Lehan Kawshila, Antonio, and Sofia." />
+  <meta name="keywords" content="SoundAlcmy, music platform, global musicians, music collaboration, Lehan Kawshila, Antonio, Sofia, soundalcmy" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://www.soundalcmy.com/" />
+
+  <!-- Favicon & Apple Touch Icon -->
+  <link rel="icon" type="image/png" href="/Logos/LogoIcon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/Logos/AppleTouchIcon.png" />
+
+  <!-- Open Graph / Facebook / WhatsApp -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://www.soundalcmy.com/" />
+  <meta property="og:title" content="SoundAlcmy – Unite Global Musicians" />
+  <meta property="og:description" content="A global music platform connecting artists from every culture. Co-founded by Lehan Kawshila, Antonio, and Sofia." />
+<meta property="og:image" content="https://www.soundalcmy.com/soundalcmylogo3.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="625" />
+  <meta property="og:image:height" content="625" />
+  <meta property="og:site_name" content="SoundAlchemy" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SoundAlchemy – Unite Global Musicians" />
+  <meta name="twitter:description" content="Join SoundAlcmy to connect, collaborate, and create music worldwide. Founded by Lehan Kawshila, Antonio, and Sofia." />
+  <meta name="twitter:image" content="https://www.soundalcmy.com/Logos/SoundAlcmyLogo2.png" />
+
+  <!-- Preconnect & Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
+
+  <!-- Preload Logo & Script -->
+  <link rel="preload" as="image" href="https://www.soundalcmy.com/Logos/SoundAlcmyLogo2.png" />
+  <link rel="preload" as="script" href="/src/main.tsx" />
+
+  <!-- Sitemap -->
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+
+  <!-- Schema.org Structured Data -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "SoundAlcmy",
+      "url": "https://www.soundalcmy.com",
+      "logo": "https://www.soundalcmy.com/Logos/SoundAlcmyLogo2.png",
+      "description": "Global music platform where musicians from all cultures unite to collaborate and create music.",
+      "founders": [
+        { "@type": "Person", "name": "Lehan Kawshila" },
+        { "@type": "Person", "name": "Antonio" },
+        { "@type": "Person", "name": "Sofia" }
+      ],
+      "sameAs": [
+        "https://www.youtube.com/@soundalchemy",
+        "https://twitter.com/SoundAlchemy",
+        "https://www.instagram.com/soundalchemy",
+        "https://www.facebook.com/soundalchemy"
+      ]
+    }
+  </script>
+
+  <!-- Google Analytics (Replace with your ID) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXX');
+  </script>
+
+  <style>
+    /* Optional: Ensure no visual flashes before React loads */
+    body { margin: 0; background-color: #0a0a16; color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <noscript>
+    <div style="padding: 20px; text-align: center; color: white; background-color: #0a0a16;">
+      <h1>JavaScript Required</h1>
+      <p>SoundAlchemy requires JavaScript to function. Please enable JavaScript to continue.</p>
+    </div>
+  </noscript>
+
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    function noAdminsExist() {
+      return !exists(/databases/$(database)/documents/admins);
+    }
+    
+    // Admin collection rules
+    match /admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow create: if noAdminsExist();
+      allow update, delete: if isAdmin() && request.auth.uid == adminId;
+    }
+    
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+    
+    // Messages collection rules
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == resource.data.senderId || 
+         request.auth.uid == resource.data.receiverId);
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.senderId;
+      allow update, delete: if isAuthenticated() && 
+        (request.auth.uid == resource.data.senderId || 
+         request.auth.uid == resource.data.receiverId);
+    }
+
+    // Artists collection rules
+    match /artists/{artistId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == artistId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == artistId || isAdmin());
+    }
+
+    // Albums collection rules
+    match /albums/{albumId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == resource.data.artistId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.artistId || isAdmin());
+    }
+
+    // Playlists collection rules
+    match /playlists/{playlistId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.ownerId || isAdmin());
+    }
+
+    // Events collection rules
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.organizerId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.organizerId || isAdmin());
+    }
+
+    // Venues collection rules
+    match /venues/{venueId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.ownerId || isAdmin());
+    }
+
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

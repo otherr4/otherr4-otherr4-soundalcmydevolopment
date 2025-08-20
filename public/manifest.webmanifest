@@ -1,0 +1,9 @@
+{
+  "name": "SoundAlchemy",
+  "short_name": "SoundAlchemy",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "description": "A universal platform for musicians to connect and collaborate.",
+  "icons": []
+} 

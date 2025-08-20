@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoji Picker Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #5855eb;
+        }
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            margin: 20px 0;
+        }
+        .emoji-btn {
+            padding: 10px;
+            font-size: 24px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .emoji-btn:hover {
+            background: #444;
+        }
+        .debug {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Emoji Picker Test</h1>
+        
+        <div class="debug" id="debug">
+            Debug info will appear here...
+        </div>
+        
+        <input type="text" id="testInput" placeholder="Type here and click emojis to test insertion..." />
+        
+        <div>
+            <button onclick="testEmojiInsertion('😊')">Test 😊</button>
+            <button onclick="testEmojiInsertion('🎵')">Test 🎵</button>
+            <button onclick="testEmojiInsertion('🎸')">Test 🎸</button>
+        </div>
+        
+        <h3>Quick Emoji Grid:</h3>
+        <div class="emoji-grid" id="emojiGrid">
+            <!-- Emojis will be added here -->
+        </div>
+        
+        <div>
+            <button onclick="clearInput()">Clear Input</button>
+            <button onclick="showDebugInfo()">Show Debug Info</button>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('testInput');
+        const debug = document.getElementById('debug');
+        const emojiGrid = document.getElementById('emojiGrid');
+        
+        const testEmojis = ['😊', '😂', '🥰', '😎', '🤔', '😢', '😡', '🤗', '❤️', '👍', '🎵', '🎸', '🎹', '🥁', '🎤', '🎧'];
+        
+        // Create emoji grid
+        testEmojis.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.className = 'emoji-btn';
+            btn.textContent = emoji;
+            btn.onclick = () => testEmojiInsertion(emoji);
+            emojiGrid.appendChild(btn);
+        });
+        
+        function testEmojiInsertion(emoji) {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const currentValue = input.value;
+            const before = currentValue.substring(0, start);
+            const after = currentValue.substring(end);
+            
+            const newValue = before + emoji + after;
+            input.value = newValue;
+            
+            // Set cursor position after the inserted emoji
+            const newPosition = start + emoji.length;
+            input.setSelectionRange(newPosition, newPosition);
+            input.focus();
+            
+            logDebug(`Inserted ${emoji} at position ${start}. New value: "${newValue}"`);
+        }
+        
+        function clearInput() {
+            input.value = '';
+            input.focus();
+            logDebug('Input cleared');
+        }
+        
+        function showDebugInfo() {
+            const info = `
+                Input value: "${input.value}"
+                Selection start: ${input.selectionStart}
+                Selection end: ${input.selectionEnd}
+                Input focused: ${document.activeElement === input}
+            `;
+            logDebug(info);
+        }
+        
+        function logDebug(message) {
+            debug.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            console.log('[Debug]', message);
+        }
+        
+        // Log input events
+        input.addEventListener('input', (e) => {
+            logDebug(`Input event: value="${e.target.value}", selectionStart=${e.target.selectionStart}`);
+        });
+        
+        input.addEventListener('click', (e) => {
+            logDebug(`Click event: selectionStart=${e.target.selectionStart}`);
+        });
+        
+        input.addEventListener('keyup', (e) => {
+            logDebug(`Keyup event: selectionStart=${e.target.selectionStart}`);
+        });
+        
+        // Initial debug info
+        logDebug('Test page loaded. Click emojis to test insertion.');
+    </script>
+</body>
+</html> 

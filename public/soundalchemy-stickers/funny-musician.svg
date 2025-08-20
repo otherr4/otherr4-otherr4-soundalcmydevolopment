@@ -1,0 +1,12 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="20" fill="#1A1A2E"/>
+  <circle cx="60" cy="45" r="20" fill="#FFD93D"/>
+  <circle cx="55" cy="40" r="3" fill="#333"/>
+  <circle cx="65" cy="40" r="3" fill="#333"/>
+  <path d="M55 50 Q60 55 65 50" stroke="#333" stroke-width="2" fill="none"/>
+  <path d="M40 25 Q50 15 60 25 Q70 15 80 25" stroke="#FF6B6B" stroke-width="4" fill="none"/>
+  <ellipse cx="60" cy="85" rx="25" ry="8" fill="#8B4513"/>
+  <rect x="55" y="45" width="10" height="35" fill="#8B4513"/>
+  <circle cx="60" cy="85" r="15" fill="#D2691E"/>
+  <text x="60" y="110" text-anchor="middle" fill="#E94560" font-family="Arial" font-size="10" font-weight="bold">ROCK STAR!</text>
+</svg>

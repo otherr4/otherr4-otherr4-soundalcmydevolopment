@@ -1,0 +1,14 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="20" fill="#1A1A2E"/>
+  <circle cx="60" cy="35" r="15" fill="#FFD93D"/>
+  <circle cx="56" cy="30" r="2" fill="#333"/>
+  <circle cx="64" cy="30" r="2" fill="#333"/>
+  <path d="M56 38 Q60 42 64 38" stroke="#333" stroke-width="1.5" fill="none"/>
+  <path d="M45 20 Q55 10 65 20" stroke="#8B4513" stroke-width="4" fill="none"/>
+  <rect x="20" y="60" width="80" height="25" fill="#16213E"/>
+  <rect x="20" y="60" width="80" height="8" fill="#0F3460"/>
+  <rect x="22" y="62" width="2" height="4" fill="#E94560"/>
+  <rect x="26" y="62" width="2" height="4" fill="#E94560"/>
+  <rect x="30" y="62" width="2" height="4" fill="#E94560"/>
+  <text x="60" y="110" text-anchor="middle" fill="#E94560" font-family="Arial" font-size="10" font-weight="bold">MAESTRO!</text>
+</svg>
